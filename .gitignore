@@ -1,3 +1,5 @@
+/workspace/*
+
 /data/*
 !/data/demographics/
 /data/demographics/*
