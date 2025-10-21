@@ -1,0 +1,28 @@
+Alz_EEG_analyze
+├── .gitignore
+├── data
+│   ├── demographics
+│   │   ├── ACS.csv
+│   │   ├── NAD.csv
+│   │   ├── P.csv
+│   │   └── _details.txt
+│   ├── EEG
+│   │   ├── data_tree.txt
+│   │   └── path.txt
+│   └── table
+├── poetry.lock
+├── pyproject.toml
+├── README.md
+├── repo_structure.txt
+├── script
+├── src
+└── workspace
+    ├── marked_tables
+    │   ├── ACS_marked.xlsx
+    │   ├── NAD_marked.xlsx
+    │   └── P_marked.xlsx
+    └── table
+        ├── ACS.csv
+        ├── mapping_table.csv
+        ├── NAD.csv
+        └── P.csv
