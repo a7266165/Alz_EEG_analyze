@@ -1,0 +1,9 @@
+/data/*
+!/data/demographics/
+/data/demographics/*
+!/data/demographics/_details.txt
+
+!/data/EEG/ 
+/data/EEG/*                                  
+!/data/EEG/data_tree.txt
+!/data/EEG/path.txt

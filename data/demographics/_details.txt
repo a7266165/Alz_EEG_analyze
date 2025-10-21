@@ -1,0 +1,20 @@
+三個csv檔案的內容分別為
+
+ID	ACS	Sex	Age	Photo_Session	Has_Missing	Photo_Date	NPT_Date	NPT_Session	Diff_Days	MMSE	CASI
+ACS1-1	1	F	40.15	1	FALSE	2020/3/3	2020/5/19	1	77	30	97
+ACS1-2	1	F	40.7	2	FALSE	2020/9/22	2020/5/19	1	126	30	97
+......
+
+ID	NAD	Sex	Age	Photo_Session	Has_Missing	Photo_Date	NPT_Date	NPT_Session	Diff_Days	MMSE	CASI	
+Global_CDR	CDR_Dom1	CDR_Dom2	CDR_Dom3	CDR_Dom4	CDR_Dom5	CDR_Dom6	CDR_SB
+
+NAD9-1	9	F	70.5	1	FALSE	2020/1/10													
+NAD10-1	10	F	74.48	1	FALSE	2020/1/13	2019/8/6	1	160	28	88	0.5	0.5	0.5	0	0	0.5	0	1.5
+NAD11-1	11	F	71.4	1	FALSE	2020/1/13													
+......
+
+ID	Patient	Sex	Age	Photo_Session	Has_Missing	Photo_Date	NPT_Date	NPT_Session	Diff_Days	MMSE	CASI	
+Global_CDR	CDR_Dom1	CDR_Dom2	CDR_Dom3	CDR_Dom4	CDR_Dom5	CDR_Dom6	CDR_SB
+P1-1	1	F	78.03	1	TRUE	2019/6/25	2019/5/13	1	43	15	66	0.5	0.5	0.5	1	0.5	0.5	0	3
+P1-2	1	F	78.56	2	FALSE	2020/1/7	2020/5/13	2	127	15	56	0.5	0.5	0.5	1	0.5	0.5	0	3
+......
