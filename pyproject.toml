@@ -1,0 +1,19 @@
+[project]
+name = "alz-eeg-analyze"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "a7266165",email = "M123020018@student.nsysu.edu.tw"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas (>=2.3.3,<3.0.0)",
+    "mne (>=1.10.2,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
