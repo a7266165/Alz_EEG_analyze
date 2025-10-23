@@ -16,7 +16,11 @@ Alz_EEG_analyze
 ├── repo_structure.txt
 ├── script
 ├── src
+│   ├── analyzer.py
+│   ├── loader.py
+│   └── Trainer.py
 └── workspace
+    ├── analyze_result_all
     ├── marked_tables
     │   ├── ACS_marked.xlsx
     │   ├── NAD_marked.xlsx
