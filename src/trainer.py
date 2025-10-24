@@ -17,34 +17,40 @@ class FeatureExtractor:
     """
     
     @staticmethod
-    def extract(features: EEGFeatures) -> np.ndarray:
+    def extract(features: EEGFeatures, feature_type: str = 'all') -> np.ndarray:
         """
         提取特徵向量
         
         Args:
             features: EEGFeatures 物件
+            feature_type: 'absolute', 'relative', 或 'all'
             
         Returns:
-            特徵向量 (238,) = 17 頻道 × 14 特徵
+            特徵向量
         """
         feature_vector = []
         
         for i in range(len(features.channels)):
-            # 每個頻道的 7 個頻帶絕對能量
-            for band in EEGAnalyzer.BANDS.keys():
-                feature_vector.append(features.band_powers[band][i])
+            # 絕對能量
+            if feature_type in ['absolute', 'all']:
+                for band in EEGAnalyzer.BANDS.keys():
+                    feature_vector.append(features.band_powers[band][i])
             
-            # 每個頻道的 7 個頻帶相對能量
-            for band in EEGAnalyzer.BANDS.keys():
-                feature_vector.append(features.relative_powers[band][i])
+            # 相對能量
+            if feature_type in ['relative', 'all']:
+                for band in EEGAnalyzer.BANDS.keys():
+                    feature_vector.append(features.relative_powers[band][i])
         
         return np.array(feature_vector)
     
     @staticmethod
-    def get_feature_names() -> List[str]:
+    def get_feature_names(feature_type: str = 'all') -> List[str]:
         """
         取得特徵名稱
         
+        Args:
+            feature_type: 'absolute', 'relative', 或 'all'
+
         Returns:
             特徵名稱列表
         """
@@ -53,12 +59,12 @@ class FeatureExtractor:
         
         names = []
         for ch in channels:
-            # 絕對能量
-            for band in bands:
-                names.append(f"{ch}_{band}_abs")
-            # 相對能量
-            for band in bands:
-                names.append(f"{ch}_{band}_rel")
+            if feature_type in ['absolute', 'all']:
+                for band in bands:
+                    names.append(f"{ch}_{band}_abs")
+            if feature_type in ['relative', 'all']:
+                for band in bands:
+                    names.append(f"{ch}_{band}_rel")
         
         return names
 
@@ -72,17 +78,23 @@ class XGBoostTrainer:
         self,
         test_size: float = 0.2,
         random_state: int = 42,
+        feature_type: str = 'all',
         **xgb_params
     ):
         """
         Args:
             test_size: 測試集比例
             random_state: 隨機種子
+            feature_type: 特徵類型 ('absolute', 'relative', 'all')
             **xgb_params: XGBoost 參數
         """
         self.test_size = test_size
         self.random_state = random_state
+        self.feature_type = feature_type
         
+        if feature_type not in ['absolute', 'relative', 'all']:
+            raise ValueError(f"feature_type must be 'absolute', 'relative', or 'all', got '{feature_type}'")
+
         # 預設 XGBoost 參數
         self.xgb_params = {
             'n_estimators': 100,
@@ -112,7 +124,7 @@ class XGBoostTrainer:
         subject_ids = []
         
         for features in features_list:
-            feature_vector = FeatureExtractor.extract(features)
+            feature_vector = FeatureExtractor.extract(features, self.feature_type)
             X.append(feature_vector)
             subject_ids.append(features.subject_id)
         
@@ -120,6 +132,7 @@ class XGBoostTrainer:
         y = np.array(labels)
         
         print(f"特徵矩陣: {X.shape}")
+        print(f"特徵類型: {self.feature_type}")
         print(f"標籤向量: {y.shape}")
         print(f"受試者數: {len(set(subject_ids))} 人")
         print(f"樣本總數: {len(subject_ids)} 筆")
@@ -195,7 +208,7 @@ class XGBoostTrainer:
         print(cm)
         
         # 特徵重要性
-        feature_names = FeatureExtractor.get_feature_names()
+        feature_names = FeatureExtractor.get_feature_names(self.feature_type)
         feature_importance = pd.DataFrame({
             'feature': feature_names,
             'importance': model.feature_importances_

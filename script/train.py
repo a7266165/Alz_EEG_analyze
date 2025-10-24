@@ -217,6 +217,7 @@ def train_classification_model(
     labels: list,
     subject_ids: list,
     output_dir: Path,
+    feature_type: str = 'all',
     xgb_params: dict = None
 ):
     """
@@ -227,6 +228,7 @@ def train_classification_model(
         labels: 標籤列表
         subject_ids: 受試者ID列表
         output_dir: 輸出目錄
+        feature_type: 特徵類型 ('absolute', 'relative', 'all')
         xgb_params: XGBoost 參數
     """
     print("\n=== 訓練分類模型 ===")
@@ -236,7 +238,8 @@ def train_classification_model(
         'test_size': 0.2,
         'random_state': 42,
         'n_estimators': 100,
-        'max_depth': 5
+        'max_depth': 5,
+        'feature_type': feature_type
     }
     
     if xgb_params:
@@ -258,6 +261,7 @@ def main_analysis_pipeline(
     groups: list = None,
     cdr_threshold: float = 0.5,
     dataset_selection: str = "all",
+    feature_type: str = 'all',
     force_recompute: bool = False,
     skip_report: bool = False,
     skip_training: bool = False,
@@ -270,6 +274,7 @@ def main_analysis_pipeline(
         groups: 要分析的組別
         cdr_threshold: CDR 閾值
         dataset_selection: 資料集選擇 ("first", "second", "all")
+        feature_type: 特徵類型 ('absolute', 'relative', 'all')
         force_recompute: 是否強制重新計算特徵
         skip_report: 是否跳過統計報告
         skip_training: 是否跳過模型訓練
@@ -278,6 +283,7 @@ def main_analysis_pipeline(
     print("=" * 70)
     print("EEG 阿茲海默症分析流程")
     print("=" * 70)
+    print(f"特徵選擇: {feature_type}")
     
     # 設定
     if groups is None:
@@ -350,6 +356,7 @@ def main_analysis_pipeline(
                 result['labels'],
                 result['subject_ids'],
                 output_dir,
+                feature_type,
                 xgb_params
             )
     else:
@@ -366,7 +373,8 @@ if __name__ == "__main__":
     main_analysis_pipeline(
         groups=["ACS", "NAD", "P"],
         cdr_threshold=0.5,
-        dataset_selection="second",
+        dataset_selection="all",
+        feature_type='absolute',          # 'absolute', 'relative', or 'all'
         force_recompute=False,      # 使用快取（如果存在）
         skip_report=False,          # 生成統計報告
         skip_training=False,        # 訓練分類模型
