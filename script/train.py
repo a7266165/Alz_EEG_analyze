@@ -7,6 +7,8 @@ from pathlib import Path
 import pickle
 import hashlib
 import json
+import pandas as pd
+import numpy as np
 
 # 加入專案路徑
 project_root = Path(__file__).parent.parent
@@ -218,7 +220,9 @@ def train_classification_model(
     subject_ids: list,
     output_dir: Path,
     feature_type: str = 'all',
-    xgb_params: dict = None
+    xgb_params: dict = None,
+    n_runs: int = 1,
+    base_seed: int = 42
 ):
     """
     訓練 XGBoost 分類模型
@@ -230,31 +234,131 @@ def train_classification_model(
         output_dir: 輸出目錄
         feature_type: 特徵類型 ('absolute', 'relative', 'all')
         xgb_params: XGBoost 參數
+        n_runs: 訓練模型數量
+        base_seed: 起始隨機種子
     """
     print("\n=== 訓練分類模型 ===")
+    print(f"使用特徵: {feature_type}")
+    print(f"訓練次數: {n_runs}")
+
+    all_results = []
     
-    # 預設參數
-    default_params = {
-        'test_size': 0.2,
-        'random_state': 42,
-        'n_estimators': 100,
-        'max_depth': 5,
-        'feature_type': feature_type
-    }
+    for run_idx in range(n_runs):
+        seed = base_seed + run_idx
+        print(f"\n--- 第 {run_idx+1}/{n_runs} 次訓練 (seed={seed}) ---")
+
+        # 預設參數
+        default_params = {
+            'test_size': 0.2,
+            'random_state': seed,
+            'n_estimators': 100,
+            'max_depth': 5,
+            'feature_type': feature_type
+        }
+        
+        if xgb_params:
+            default_params.update(xgb_params)
+        
+        # 訓練
+        trainer = XGBoostTrainer(**default_params)
+        X, y, subject_ids = trainer.prepare_data(features_list, labels)
+        
+        # 為每次運行建立子目錄
+        run_dir = output_dir / f"run_{run_idx+1}_seed_{seed}"
+        results = trainer.train(X, y, subject_ids, save_dir=run_dir)
+
+        all_results.append({
+                    'run': run_idx + 1,
+                    'seed': seed,
+                    'train_acc': results['train_acc'],
+                    'test_acc': results['test_acc'],
+                    'model': results['model'],
+                    'feature_importance': results['feature_importance']
+                })
     
-    if xgb_params:
-        default_params.update(xgb_params)
-    
-    # 訓練
-    trainer = XGBoostTrainer(**default_params)
-    X, y, subject_ids = trainer.prepare_data(features_list, labels)
-    results = trainer.train(X, y, subject_ids, save_dir=output_dir)
-    
-    # 顯示重要特徵
-    print("\n=== Top 10 重要特徵 ===")
-    print(results['feature_importance'].head(10).to_string(index=False))
+    # 統計分析
+    if n_runs > 1:
+        _analyze_multiple_runs(all_results, output_dir, feature_type)
+    else:
+        # 單次運行時顯示特徵重要性
+        print("\n=== Top 10 重要特徵 ===")
+        print(all_results[0]['feature_importance'].head(10).to_string(index=False))
     
     return results
+
+def _analyze_multiple_runs(results: list, output_dir: Path, feature_type: str):
+    """
+    分析多次運行的結果
+    
+    Args:
+        results: 所有運行結果列表
+        output_dir: 輸出目錄
+        feature_type: 特徵類型
+    """
+    import matplotlib.pyplot as plt
+    
+    # 收集準確率
+    train_accs = [r['train_acc'] for r in results]
+    test_accs = [r['test_acc'] for r in results]
+    
+    # 統計
+    train_mean, train_std = np.mean(train_accs), np.std(train_accs)
+    test_mean, test_std = np.mean(test_accs), np.std(test_accs)
+    
+    print("\n" + "=" * 60)
+    print(f"多次運行統計 ({len(results)} 次, 特徵類型: {feature_type})")
+    print("=" * 60)
+    print(f"訓練集準確率: {train_mean:.4f} ± {train_std:.4f}")
+    print(f"測試集準確率: {test_mean:.4f} ± {test_std:.4f}")
+    print(f"最佳測試準確率: {max(test_accs):.4f} (seed={results[np.argmax(test_accs)]['seed']})")
+    print(f"最差測試準確率: {min(test_accs):.4f} (seed={results[np.argmin(test_accs)]['seed']})")
+    
+    # 彙總特徵重要性
+    all_importances = pd.concat([
+        r['feature_importance'].assign(run=r['run']) 
+        for r in results
+    ])
+    
+    # 計算平均重要性
+    avg_importance = (all_importances.groupby('feature')['importance']
+                      .agg(['mean', 'std'])
+                      .sort_values('mean', ascending=False)
+                      .reset_index())
+    
+    print("\n=== Top 10 平均特徵重要性 ===")
+    print(avg_importance.head(10).to_string(index=False))
+    
+    # 儲存統計結果
+    summary = pd.DataFrame(results)[['run', 'seed', 'train_acc', 'test_acc']]
+    summary.to_csv(output_dir / 'multiple_runs_summary.csv', index=False)
+    avg_importance.to_csv(output_dir / 'average_feature_importance.csv', index=False)
+    
+    # 繪製準確率分佈圖
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # 準確率箱型圖
+    ax1.boxplot([train_accs, test_accs], tick_labels=['Train', 'Test'])
+    ax1.set_ylabel('Accuracy')
+    ax1.set_title(f'Accuracy Distribution ({len(results)} runs)')
+    ax1.grid(True, alpha=0.3)
+    
+    # 準確率趨勢圖
+    runs = list(range(1, len(results) + 1))
+    ax2.plot(runs, train_accs, 'o-', label=f'Train ({train_mean:.3f}±{train_std:.3f})')
+    ax2.plot(runs, test_accs, 's-', label=f'Test ({test_mean:.3f}±{test_std:.3f})')
+    ax2.axhline(train_mean, color='blue', linestyle='--', alpha=0.5)
+    ax2.axhline(test_mean, color='orange', linestyle='--', alpha=0.5)
+    ax2.set_xlabel('Run')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title('Accuracy Across Runs')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'multiple_runs_analysis.png', dpi=300)
+    plt.close()
+    
+    print(f"\n✓ 多次運行分析已儲存至: {output_dir}")
 
 
 def main_analysis_pipeline(
@@ -262,6 +366,8 @@ def main_analysis_pipeline(
     cdr_threshold: float = 0.5,
     dataset_selection: str = "all",
     feature_type: str = 'all',
+    n_runs: int = 1, 
+    base_seed: int = 42,
     force_recompute: bool = False,
     skip_report: bool = False,
     skip_training: bool = False,
@@ -357,7 +463,9 @@ def main_analysis_pipeline(
                 result['subject_ids'],
                 output_dir,
                 feature_type,
-                xgb_params
+                xgb_params,
+                n_runs,
+                base_seed
             )
     else:
         print(f"\n[步驟 4/4] 跳過模型訓練")
@@ -373,8 +481,10 @@ if __name__ == "__main__":
     main_analysis_pipeline(
         groups=["ACS", "NAD", "P"],
         cdr_threshold=0.5,
-        dataset_selection="all",
-        feature_type='absolute',          # 'absolute', 'relative', or 'all'
+        dataset_selection="second",
+        n_runs=100,
+        base_seed=42,
+        feature_type='absolute',         # 'absolute', 'relative', or 'all'
         force_recompute=False,      # 使用快取（如果存在）
         skip_report=False,          # 生成統計報告
         skip_training=False,        # 訓練分類模型
