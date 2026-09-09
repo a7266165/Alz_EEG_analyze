@@ -5,6 +5,7 @@ EEG 資料載入模組
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from src.config import WORKSPACE_DIR
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import warnings
@@ -94,7 +95,7 @@ class DataLoader:
         
         # 快取設定
         self.use_cache = use_cache
-        self.cache_dir = Path(cache_dir or "workspace/cache")
+        self.cache_dir = Path(cache_dir) if cache_dir else WORKSPACE_DIR / "cache"
         if self.use_cache:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
         
@@ -419,13 +420,14 @@ class DataLoader:
         if cache_key in self._edf_paths_cache:
             return self._edf_paths_cache[cache_key]
         
-        # 讀取 EEG 根目錄
+        # EEG 根目錄：eeg_dir 本身就是 edf 根（D:\Alz 佈局，由 config.EEG_RAW_DIR 提供）；
+        # 若目錄內仍有舊式 path.txt 指路檔則沿用其值（相容舊佈局）。
         eeg_path_file = self.eeg_dir / "path.txt"
         if eeg_path_file.exists():
             with open(eeg_path_file, 'r', encoding='utf-8') as f:
                 edf_root = Path(f.read().strip())
         else:
-            raise FileNotFoundError(f"path.txt not found: {eeg_path_file}")
+            edf_root = Path(self.eeg_dir)
         
         if not edf_root.exists():
             raise FileNotFoundError(f"EDF directory not found: {edf_root}")

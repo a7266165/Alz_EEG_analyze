@@ -14,6 +14,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.stft_transform import EEGToSTFTImage, STFTConfig
+from src.config import WORKSPACE_DIR
 
 
 def test_single_edf(edf_path: Path, output_dir: Path = None):
@@ -29,7 +30,7 @@ def test_single_edf(edf_path: Path, output_dir: Path = None):
         return
     
     if output_dir is None:
-        output_dir = project_root / "workspace" / "stft_test"
+        output_dir = WORKSPACE_DIR / "stft_test"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # 轉換

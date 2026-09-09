@@ -8,6 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+from src.config import WORKSPACE_DIR
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from scipy import stats
@@ -161,7 +162,7 @@ class EEGAnalyzer:
         group2_features: List[EEGFeatures],
         group1_name: str = "Control",
         group2_name: str = "Patient",
-        output_dir: Path = Path("workspace/analyze_result"),
+        output_dir: Path = WORKSPACE_DIR / "analyze_result",
         generate_topomap: bool = True
     ):
         """

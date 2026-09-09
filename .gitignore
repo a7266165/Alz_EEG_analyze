@@ -1,13 +1,6 @@
 __pycache__*
 
-/workspace/*
-
-/data/*
-!/data/demographics/
-/data/demographics/*
-!/data/demographics/_details.txt
-
-!/data/EEG/ 
-/data/EEG/*                                  
-!/data/EEG/data_tree.txt
-!/data/EEG/path.txt
+# D:\Alz 佈局（2026-09）：data/ 與 workspace/ 已外移，路徑由 paths.txt 宣告
+/paths.txt
+/data/
+/workspace/

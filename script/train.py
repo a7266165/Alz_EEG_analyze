@@ -18,12 +18,13 @@ sys.path.insert(0, str(project_root))
 from src.analyzer import EEGAnalyzer
 from src.trainer import XGBoostTrainer
 from src.loader import DataLoader
+from src.config import DEMOGRAPHICS_DIR, EEG_RAW_DIR, WORKSPACE_DIR
 
 
 class FeatureCache:
     """特徵快取管理器"""
     
-    def __init__(self, cache_dir: Path = Path("workspace/features")):
+    def __init__(self, cache_dir: Path = WORKSPACE_DIR / "features"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
     
@@ -800,14 +801,14 @@ def main_analysis_pipeline(
     if groups is None:
         groups = ["ACS", "NAD", "P"]
     
-    output_dir = Path("workspace/analyze_result")
+    output_dir = WORKSPACE_DIR / "analyze_result"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # 1. 載入資料集
     print("\n[步驟 1/4] 載入資料集")
     loader = DataLoader(
-        demographics_dir=Path("data/demographics"),
-        eeg_dir=Path("data/EEG"),
+        demographics_dir=DEMOGRAPHICS_DIR,
+        eeg_dir=EEG_RAW_DIR,
         groups=groups,
         cdr_thresholds=[cdr_threshold],
         data_balancing=True,

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from pathlib import Path
+from src.config import WORKSPACE_DIR
 from typing import List, Dict, Tuple, Union
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, matthews_corrcoef, roc_curve, auc, precision_recall_curve
 from src.analyzer import EEGFeatures, EEGAnalyzer
@@ -362,7 +363,7 @@ class XGBoostTrainer:
         y: np.ndarray,
         subject_ids: List[str],
         feature_names: List[str] = None,
-        save_dir: Path = Path("workspace/analyze_result")
+        save_dir: Path = WORKSPACE_DIR / "analyze_result"
     ) -> Dict:
         """
         訓練 XGBoost 模型（確保同一個人的資料在同一集）
