@@ -180,13 +180,25 @@ class DataLoader:
         # Step 3: 篩選資料（CDR、年齡等）
         filtered_df = self._filter_demographics(
             combined_df,
-            cdr_threshold=cdr_threshold
+            cdr_threshold=cdr_threshold,
         )
         
         # Step 4: 資料平衡
         if self.data_balancing:
-            filtered_df = self._apply_data_balancing(filtered_df)
+            balanced_df = self._apply_data_balancing(filtered_df)
         
+
+        # Step 4.5: 統計篩選前後的差異（移到這裡）
+        stats_output_path = self.cache_dir / f"demographics_stats_CDR{cdr_threshold}.csv"
+        self._generate_demographics_report(
+            original_df=combined_df,      # 原始資料
+            filtered_df=filtered_df,      # CDR篩選後
+            balanced_df=balanced_df,      # 年齡平衡後
+            output_path=stats_output_path,
+            cdr_threshold=cdr_threshold
+        )
+    
+
         # Step 5: 最終配對（只配對保留下來的 ID）
         final_edf_paths = {
             subject_id: path 
@@ -216,6 +228,125 @@ class DataLoader:
             edf_paths=final_edf_paths
         )
     
+    def _generate_demographics_report(
+        self, 
+        original_df: pd.DataFrame,
+        filtered_df: pd.DataFrame,
+        balanced_df: pd.DataFrame,
+        output_path: Path,
+        cdr_threshold: float
+    ):
+        """生成完整的人口統計報告（包含三個階段）"""
+        stats_records = []
+        
+        # 階段1: 原始資料
+        stats_records.append(
+            self._collect_demographics_stats(original_df, "original", cdr_threshold)
+        )
+        
+        # 階段2: CDR篩選後
+        stats_records.append(
+            self._collect_demographics_stats(filtered_df, "after_CDR_filter", cdr_threshold)
+        )
+        
+        # 階段3: 年齡平衡後（如果有執行）
+        if self.data_balancing and len(balanced_df) != len(filtered_df):
+            stats_records.append(
+                self._collect_demographics_stats(balanced_df, "after_balancing", cdr_threshold)
+            )
+        
+        # 儲存完整統計
+        if output_path:
+            stats_df = pd.DataFrame(stats_records)
+            stats_df.to_csv(output_path, index=False)
+            print(f"✓ 人口統計已儲存至: {output_path.name}")
+
+    def _collect_demographics_stats(self, df: pd.DataFrame, stage: str, cdr_threshold: float) -> dict:
+        """收集人口統計資料（只針對Control和Patient）"""
+        stats = {
+            'stage': stage,
+            'cdr_threshold': cdr_threshold,
+            'n_total': len(df),
+        }
+        
+        # 只在有label欄位時才進行統計（篩選後才有label）
+        if 'label' in df.columns:
+            # Control組 (label=0)
+            control_df = df[df['label'] == 0]
+            if len(control_df) > 0:
+                stats['control_n'] = len(control_df)
+                
+                # Control組年齡 - 改成合併格式
+                if 'Age' in control_df.columns:
+                    control_age = control_df['Age'].dropna()
+                    if len(control_age) > 0:
+                        mean = control_age.mean()
+                        std = control_age.std()
+                        stats['control_age'] = f"{mean:.1f} ± {std:.1f}"
+                
+                # Control組性別
+                if 'Sex' in control_df.columns:
+                    control_sex = control_df['Sex'].value_counts()
+                    stats['control_M'] = control_sex.get('M', 0)
+                    stats['control_F'] = control_sex.get('F', 0)
+            
+            # Patient組 (label=1)
+            patient_df = df[df['label'] == 1]
+            if len(patient_df) > 0:
+                stats['patient_n'] = len(patient_df)
+                
+                # Patient組年齡 - 改成合併格式
+                if 'Age' in patient_df.columns:
+                    patient_age = patient_df['Age'].dropna()
+                    if len(patient_age) > 0:
+                        mean = patient_age.mean()
+                        std = patient_age.std()
+                        stats['patient_age'] = f"{mean:.1f} ± {std:.1f}"
+                
+                # Patient組性別
+                if 'Sex' in patient_df.columns:
+                    patient_sex = patient_df['Sex'].value_counts()
+                    stats['patient_M'] = patient_sex.get('M', 0)
+                    stats['patient_F'] = patient_sex.get('F', 0)
+        
+        # 如果還沒有label（篩選前），使用Group來統計
+        elif 'Group' in df.columns:
+            # Control組 = ACS + NAD（篩選前的估計）
+            control_df = df[df['Group'].isin(['ACS', 'NAD'])]
+            if len(control_df) > 0:
+                stats['control_n'] = len(control_df)
+                
+                if 'Age' in control_df.columns:
+                    control_age = control_df['Age'].dropna()
+                    if len(control_age) > 0:
+                        mean = control_age.mean()
+                        std = control_age.std()
+                        stats['control_age'] = f"{mean:.1f} ± {std:.1f}"
+                
+                if 'Sex' in control_df.columns:
+                    control_sex = control_df['Sex'].value_counts()
+                    stats['control_M'] = control_sex.get('M', 0)
+                    stats['control_F'] = control_sex.get('F', 0)
+            
+            # Patient組 = P
+            patient_df = df[df['Group'] == 'P']
+            if len(patient_df) > 0:
+                stats['patient_n'] = len(patient_df)
+                
+                if 'Age' in patient_df.columns:
+                    patient_age = patient_df['Age'].dropna()
+                    if len(patient_age) > 0:
+                        mean = patient_age.mean()
+                        std = patient_age.std()
+                        stats['patient_age'] = f"{mean:.1f} ± {std:.1f}" 
+                
+                if 'Sex' in patient_df.columns:
+                    patient_sex = patient_df['Sex'].value_counts()
+                    stats['patient_M'] = patient_sex.get('M', 0)
+                    stats['patient_F'] = patient_sex.get('F', 0)
+        
+        return stats
+
     def _load_single_demographics(self, group: str) -> pd.DataFrame:
         """載入單一組別的人口統計資料（含快取）"""
         # 檢查記憶體快取

@@ -7,16 +7,17 @@ import pandas as pd
 import xgboost as xgb
 from pathlib import Path
 from typing import List, Dict, Tuple, Union
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, matthews_corrcoef, roc_curve, auc, precision_recall_curve
 from src.analyzer import EEGFeatures, EEGAnalyzer
-
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class FeatureExtractor:
     """
     模組化特徵提取器
     支援 EEG、人口統計、問卷等多種特徵組合
     """
-    
+
     # TODO: 把所有特徵組合寫到一個config裡
     # 預設特徵配置
     FEATURE_CONFIGS = {
@@ -272,36 +273,6 @@ class FeatureExtractor:
                 feature_vector.append(corr_matrix[i, j])
                 feature_names.append(f"{ch1}-{ch2}_corr")
         
-        # 可選：加入特定頻帶的連接性
-        # 這裡我們計算各頻帶能量的頻道間相關性
-        for band_name in EEGAnalyzer.BANDS.keys():
-            band_powers = features.band_powers[band_name]
-            
-            # 計算這個頻帶下不同頻道間的功率相關性
-            # 使用簡單的統計量：平均功率差異和變異係數
-            mean_power = np.mean(band_powers)
-            std_power = np.std(band_powers)
-            
-            if mean_power > 0:
-                cv = std_power / mean_power  # 變異係數
-                feature_vector.append(cv)
-                feature_names.append(f"{band_name}_cv")
-            
-            # 前後腦半球的功率比（簡單的不對稱性指標）
-            left_channels = [i for i, ch in enumerate(features.channels) 
-                           if any(x in ch.upper() for x in ['F3', 'C3', 'P3', 'T3', 'O1'])]
-            right_channels = [i for i, ch in enumerate(features.channels) 
-                            if any(x in ch.upper() for x in ['F4', 'C4', 'P4', 'T4', 'O2'])]
-            
-            if left_channels and right_channels:
-                left_power = np.mean([band_powers[i] for i in left_channels])
-                right_power = np.mean([band_powers[i] for i in right_channels])
-                
-                if (left_power + right_power) > 0:
-                    asymmetry = (left_power - right_power) / (left_power + right_power)
-                    feature_vector.append(asymmetry)
-                    feature_names.append(f"{band_name}_asymmetry")
-        
         return feature_vector, feature_names
     
     def _clean_channel_name(self, channel: str) -> str:
@@ -513,10 +484,7 @@ class XGBoostTrainer:
             cm: 混淆矩陣
             save_dir: 儲存目錄
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        from sklearn.metrics import roc_curve, auc, precision_recall_curve
-        
+
         fig = plt.figure(figsize=(16, 12))
         
         # 1. 混淆矩陣
@@ -571,25 +539,22 @@ class XGBoostTrainer:
         # 6. 分類指標摘要
         ax6 = plt.subplot(2, 3, 6)
         ax6.axis('off')
-        
-        from sklearn.metrics import precision_score, recall_score, f1_score
-        
+    
+        cm = confusion_matrix(y_test, y_pred_test)
+        tn, fp, fn, tp = cm.ravel()
+
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0  # TPR
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0  # TNR
+        mcc = matthews_corrcoef(y_test, y_pred_test)
+
         metrics_text = f"""
 Classification Metrics (Test Set)
 
-Accuracy:  {accuracy_score(y_test, y_pred_test):.4f}
-Precision: {precision_score(y_test, y_pred_test):.4f}
-Recall:    {recall_score(y_test, y_pred_test):.4f}
-F1-Score:  {f1_score(y_test, y_pred_test):.4f}
-ROC-AUC:   {roc_auc:.4f}
-
-Confusion Matrix:
-  TN: {cm[0, 0]:4d}  FP: {cm[0, 1]:4d}
-  FN: {cm[1, 0]:4d}  TP: {cm[1, 1]:4d}
-
-Total Samples: {len(y_test)}
-  Class 0: {np.sum(y_test == 0)}
-  Class 1: {np.sum(y_test == 1)}
+Accuracy:    {accuracy_score(y_test, y_pred_test):.4f}
+Sensitivity: {sensitivity:.4f}
+Specificity: {specificity:.4f}
+MCC:         {mcc:.4f}
+ROC-AUC:     {roc_auc:.4f}
         """
         
         ax6.text(0.1, 0.5, metrics_text, fontsize=11, 

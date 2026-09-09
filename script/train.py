@@ -296,7 +296,10 @@ def train_classification_model(
             'train_acc': results['train_acc'],
             'test_acc': results['test_acc'],
             'model': results['model'],
-            'feature_importance': results['feature_importance']
+            'feature_importance': results['feature_importance'],
+            'y_test': results['y_test'],
+            'y_pred_test': results['y_pred_test'],
+            'y_prob_test': results['y_prob_test']
         })
     
     # 統計分析
@@ -357,6 +360,8 @@ def _analyze_multiple_runs(results: list, output_dir: Path, feature_config):
     summary.to_csv(output_dir / 'multiple_runs_summary.csv', index=False)
     avg_importance.to_csv(output_dir / 'average_feature_importance.csv', index=False)
     
+    _generate_aggregated_classification_report(results, output_dir)
+
     # 繪製準確率分佈圖
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     
@@ -384,6 +389,221 @@ def _analyze_multiple_runs(results: list, output_dir: Path, feature_config):
     
     print(f"\n✓ 多次運行分析已儲存至: {output_dir}")
 
+def _generate_aggregated_classification_report(results: list, output_dir: Path):
+    """生成N次運行的綜合分類報告（包含完整視覺化）"""
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import confusion_matrix, roc_curve, auc, matthews_corrcoef
+    import seaborn as sns
+    
+    # 收集所有運行的數據
+    all_y_test = []
+    all_y_pred = []
+    all_y_prob = []
+    all_cms = []
+    all_metrics = []
+    all_feature_importances = []
+    
+    for r in results:
+        y_test = r.get('y_test')
+        y_pred = r.get('y_pred_test')
+        y_prob = r.get('y_prob_test')
+        feature_importance = r.get('feature_importance')
+        
+        if y_test is None or y_pred is None:
+            continue
+        
+        all_y_test.append(y_test)
+        all_y_pred.append(y_pred)
+        if y_prob is not None:
+            all_y_prob.append(y_prob)
+        
+        # 計算混淆矩陣
+        cm = confusion_matrix(y_test, y_pred)
+        all_cms.append(cm)
+        
+        # 計算指標
+        tn, fp, fn, tp = cm.ravel()
+        accuracy = (tp + tn) / (tp + tn + fp + fn)
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        mcc = matthews_corrcoef(y_test, y_pred)
+        roc_auc = auc(*roc_curve(y_test, y_prob)[:2]) if y_prob is not None else 0
+        
+        all_metrics.append({
+            'accuracy': accuracy,
+            'sensitivity': sensitivity,
+            'specificity': specificity,
+            'mcc': mcc,
+            'roc_auc': roc_auc
+        })
+        
+        if feature_importance is not None:
+            all_feature_importances.append(feature_importance)
+    
+    if not all_metrics:
+        print("警告：沒有足夠的數據生成綜合報告")
+        return
+    
+    # 計算平均混淆矩陣
+    avg_cm = np.mean(all_cms, axis=0)
+    
+    # 計算平均指標
+    metrics_df = pd.DataFrame(all_metrics)
+    mean_metrics = metrics_df.mean()
+    std_metrics = metrics_df.std()
+    
+    # 合併所有特徵重要性並計算平均
+    if all_feature_importances:
+        combined_importance = pd.concat(all_feature_importances, ignore_index=True)
+        avg_importance = (combined_importance.groupby('feature')['importance']
+                          .agg(['mean', 'std'])
+                          .sort_values('mean', ascending=False)
+                          .reset_index())
+    else:
+        avg_importance = None
+    
+    # 繪製綜合報告
+    fig = plt.figure(figsize=(16, 12))
+    
+    # 1. 平均混淆矩陣
+    ax1 = plt.subplot(2, 3, 1)
+    sns.heatmap(avg_cm, annot=True, fmt='.1f', cmap='Blues', ax=ax1,
+                cbar_kws={'label': 'Average Count'})
+    ax1.set_title(f'Average Confusion Matrix ({len(results)} runs)')
+    ax1.set_ylabel('True Label')
+    ax1.set_xlabel('Predicted Label')
+    
+    # 2. 所有ROC曲線 + 平均ROC
+    ax2 = plt.subplot(2, 3, 2)
+    
+    # 繪製每次運行的ROC（淺色）
+    for i, (y_test, y_prob) in enumerate(zip(all_y_test, all_y_prob)):
+        if y_prob is not None:
+            fpr, tpr, _ = roc_curve(y_test, y_prob)
+            ax2.plot(fpr, tpr, alpha=0.3, color='lightblue', linewidth=1)
+    
+    # 計算並繪製平均ROC（深色）
+    if all_y_prob:
+        # 合併所有數據計算總體ROC
+        all_y_test_concat = np.concatenate(all_y_test)
+        all_y_prob_concat = np.concatenate(all_y_prob)
+        mean_fpr, mean_tpr, _ = roc_curve(all_y_test_concat, all_y_prob_concat)
+        mean_auc = auc(mean_fpr, mean_tpr)
+        
+        ax2.plot(mean_fpr, mean_tpr, color='darkblue', linewidth=2,
+                label=f'Mean ROC (AUC = {mean_auc:.3f})')
+    
+    ax2.plot([0, 1], [0, 1], 'k--', label='Random')
+    ax2.set_xlabel('False Positive Rate')
+    ax2.set_ylabel('True Positive Rate')
+    ax2.set_title('ROC Curves (All Runs)')
+    ax2.legend(loc='lower right')
+    ax2.grid(True, alpha=0.3)
+    
+    # 3. Precision-Recall曲線
+    ax3 = plt.subplot(2, 3, 3)
+    
+    from sklearn.metrics import precision_recall_curve
+    
+    # 繪製每次運行的PR曲線
+    for y_test, y_prob in zip(all_y_test, all_y_prob):
+        if y_prob is not None:
+            precision, recall, _ = precision_recall_curve(y_test, y_prob)
+            ax3.plot(recall, precision, alpha=0.3, color='lightgreen', linewidth=1)
+    
+    # 繪製平均PR曲線
+    if all_y_prob:
+        mean_precision, mean_recall, _ = precision_recall_curve(
+            all_y_test_concat, all_y_prob_concat
+        )
+        ax3.plot(mean_recall, mean_precision, color='darkgreen', linewidth=2,
+                label='Mean PR Curve')
+    
+    ax3.set_xlabel('Recall')
+    ax3.set_ylabel('Precision')
+    ax3.set_title('Precision-Recall Curves')
+    ax3.legend(loc='lower left')
+    ax3.grid(True, alpha=0.3)
+    
+    # 4. 預測機率分佈（所有運行合併）
+    ax4 = plt.subplot(2, 3, 4)
+    
+    if all_y_prob:
+        # 分離類別0和類別1的機率
+        prob_class_0 = []
+        prob_class_1 = []
+        
+        for y_test, y_prob in zip(all_y_test, all_y_prob):
+            prob_class_0.extend(y_prob[y_test == 0])
+            prob_class_1.extend(y_prob[y_test == 1])
+        
+        ax4.hist(prob_class_0, bins=20, alpha=0.5, label=f'Class 0 (n={len(prob_class_0)})', 
+                color='blue', density=True)
+        ax4.hist(prob_class_1, bins=20, alpha=0.5, label=f'Class 1 (n={len(prob_class_1)})', 
+                color='red', density=True)
+        ax4.axvline(x=0.5, color='black', linestyle='--', alpha=0.5, label='Threshold')
+        
+        ax4.set_xlabel('Predicted Probability')
+        ax4.set_ylabel('Density')
+        ax4.set_title('Aggregated Probability Distribution')
+        ax4.legend()
+        ax4.grid(True, alpha=0.3)
+    
+    # 5. Top 20 平均特徵重要性
+    ax5 = plt.subplot(2, 3, 5)
+    
+    if avg_importance is not None and len(avg_importance) > 0:
+        top_features = avg_importance.head(20)
+        
+        # 繪製帶誤差條的水平條形圖
+        y_pos = np.arange(len(top_features))
+        ax5.barh(y_pos, top_features['mean'], xerr=top_features['std'], 
+                capsize=3, color='skyblue', edgecolor='navy')
+        ax5.set_yticks(y_pos)
+        ax5.set_yticklabels(top_features['feature'], fontsize=8)
+        ax5.invert_yaxis()
+        ax5.set_xlabel('Average Importance')
+        ax5.set_title('Top 20 Feature Importance (Mean ± Std)')
+        ax5.grid(True, alpha=0.3, axis='x')
+    else:
+        ax5.text(0.5, 0.5, 'No feature importance data', 
+                ha='center', va='center', transform=ax5.transAxes)
+        ax5.set_title('Feature Importance')
+    
+    # 6. 分類指標摘要
+    ax6 = plt.subplot(2, 3, 6)
+    ax6.axis('off')
+    
+    metrics_text = f"""
+Classification Metrics ({len(all_metrics)} runs)
+
+Accuracy:     {mean_metrics['accuracy']:.4f} ± {std_metrics['accuracy']:.4f}
+Sensitivity:  {mean_metrics['sensitivity']:.4f} ± {std_metrics['sensitivity']:.4f}
+Specificity:  {mean_metrics['specificity']:.4f} ± {std_metrics['specificity']:.4f}
+MCC:          {mean_metrics['mcc']:.4f} ± {std_metrics['mcc']:.4f}
+ROC-AUC:      {mean_metrics['roc_auc']:.4f} ± {std_metrics['roc_auc']:.4f}
+    """
+    
+    ax6.text(0.1, 0.5, metrics_text, fontsize=11, 
+            family='monospace', verticalalignment='center')
+    ax6.set_title('Aggregated Performance Summary')
+    
+    # 總標題
+    fig.suptitle(f'Aggregated Classification Report ({len(results)} Runs)', 
+                fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'aggregated_classification_report.png', 
+                dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"✓ 綜合分類報告已儲存: aggregated_classification_report.png")
+    
+    # 另外儲存詳細的特徵重要性表格
+    if avg_importance is not None:
+        avg_importance.to_csv(output_dir / 'aggregated_feature_importance.csv', 
+                             index=False)
+        print(f"✓ 平均特徵重要性已儲存: aggregated_feature_importance.csv")
 
 def run_all_configs(
     result: dict,
@@ -515,9 +735,9 @@ def _generate_comparison_report(all_config_results: dict, output_dir: Path):
     all_test_accs = [row['test_accs'] for _, row in comparison_df.iterrows()]
     all_labels = [f"{row['config']}" for _, row in comparison_df.iterrows()]
     ax1.boxplot(all_test_accs, labels=all_labels)
-    ax1.set_xlabel('配置編號')
-    ax1.set_ylabel('測試集準確率')
-    ax1.set_title('各配置準確率分佈')
+    ax1.set_xlabel('Config Number')
+    ax1.set_ylabel('Test Accuracy')
+    ax1.set_title('Accuracy Distribution by Configuration')
     ax1.grid(True, alpha=0.3)
     ax1.tick_params(axis='x', rotation=45)
     
@@ -529,15 +749,15 @@ def _generate_comparison_report(all_config_results: dict, output_dir: Path):
     ax2.bar(range(len(configs)), means, yerr=stds, capsize=5)
     ax2.set_xticks(range(len(configs)))
     ax2.set_xticklabels([str(c) for c in configs])
-    ax2.set_xlabel('配置編號（按準確率排序）')
-    ax2.set_ylabel('測試集準確率')
-    ax2.set_title('平均準確率比較')
+    ax2.set_xlabel('Config Number (sorted by accuracy)')
+    ax2.set_ylabel('Test Accuracy')
+    ax2.set_title('Mean Accuracy Comparison')
     ax2.grid(True, alpha=0.3)
     
     # 加入基準線（最佳配置）
     best_mean = means[0]
     ax2.axhline(best_mean, color='r', linestyle='--', alpha=0.5, 
-                label=f'最佳: {best_mean:.4f}')
+                label=f'Best: {best_mean:.4f}')
     ax2.legend()
     
     plt.tight_layout()
@@ -590,6 +810,7 @@ def main_analysis_pipeline(
         eeg_dir=Path("data/EEG"),
         groups=groups,
         cdr_thresholds=[cdr_threshold],
+        data_balancing=True,
         dataset_selection=dataset_selection,
         use_cache=True
     )
@@ -664,8 +885,8 @@ if __name__ == "__main__":
         groups=["ACS", "NAD", "P"],
         cdr_threshold=0.5,
         dataset_selection="second",
-        feature_configs=[5, 10, 15],  # 可改為 "all" 或其他配置
-        n_runs=2,
+        feature_configs="all",
+        n_runs=100,
         base_seed=42,
         force_recompute=False,
         skip_report=False,

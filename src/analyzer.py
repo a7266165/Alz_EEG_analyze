@@ -212,7 +212,7 @@ class EEGAnalyzer:
         if generate_topomap:
             print(f"  - topomap_absolute.png")
             print(f"  - topomap_relative.png")
-            print(f"  - topomap_difference.png")
+            # print(f"  - topomap_difference.png")
         print(f"  - ttest_results.csv")
         
         return ttest_results
@@ -411,15 +411,15 @@ class EEGAnalyzer:
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
         
         # 組別1
-        sns.heatmap(corr1, ax=axes[0], cmap='coolwarm', center=0,
-                    vmin=-1, vmax=1, square=True, 
+        sns.heatmap(corr1, ax=axes[0], cmap='coolwarm', center=0.5,
+                    vmin=0, vmax=1, square=True, 
                     xticklabels=channels, yticklabels=channels,
                     cbar_kws={'label': 'Correlation'})
         axes[0].set_title(f'{group1_name} (n={len(group1_features)})')
         
-        # 組別2
-        sns.heatmap(corr2, ax=axes[1], cmap='coolwarm', center=0,
-                    vmin=-1, vmax=1, square=True,
+        # 組別2 
+        sns.heatmap(corr2, ax=axes[1], cmap='coolwarm', center=0.5,
+                    vmin=0, vmax=1, square=True,
                     xticklabels=channels, yticklabels=channels,
                     cbar_kws={'label': 'Correlation'})
         axes[1].set_title(f'{group2_name} (n={len(group2_features)})')
@@ -629,13 +629,13 @@ class EEGAnalyzer:
             use_log=False
         )
         
-        # 3. 繪製差異頭譜圖
-        self._plot_topomap_difference(
-            group1_abs_avg, group2_abs_avg,
-            group1_rel_avg, group2_rel_avg,
-            montage, group1_name, group2_name,
-            output_dir / 'topomap_difference.png'
-        )
+        # # 3. 繪製差異頭譜圖
+        # self._plot_topomap_difference(
+        #     group1_abs_avg, group2_abs_avg,
+        #     group1_rel_avg, group2_rel_avg,
+        #     montage, group1_name, group2_name,
+        #     output_dir / 'topomap_difference.png'
+        # )
         
         print(f"✓ 頭譜圖已儲存")
     
@@ -775,67 +775,67 @@ class EEGAnalyzer:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
     
-    def _plot_topomap_difference(
-        self,
-        group1_abs: Dict[str, np.ndarray],
-        group2_abs: Dict[str, np.ndarray],
-        group1_rel: Dict[str, np.ndarray],
-        group2_rel: Dict[str, np.ndarray],
-        montage_info: Tuple,
-        group1_name: str,
-        group2_name: str,
-        save_path: Path
-    ):
-        """
-        繪製差異頭譜圖（專門顯示組間差異）
+    # def _plot_topomap_difference(
+    #     self,
+    #     group1_abs: Dict[str, np.ndarray],
+    #     group2_abs: Dict[str, np.ndarray],
+    #     group1_rel: Dict[str, np.ndarray],
+    #     group2_rel: Dict[str, np.ndarray],
+    #     montage_info: Tuple,
+    #     group1_name: str,
+    #     group2_name: str,
+    #     save_path: Path
+    # ):
+    #     """
+    #     繪製差異頭譜圖（專門顯示組間差異）
         
-        Args:
-            group1_abs: 組別1絕對能量
-            group2_abs: 組別2絕對能量
-            group1_rel: 組別1相對能量
-            group2_rel: 組別2相對能量
-            montage_info: (montage, ch_names) tuple
-            group1_name: 組別1名稱
-            group2_name: 組別2名稱
-            save_path: 儲存路徑
-        """
-        import matplotlib.gridspec as gridspec
+    #     Args:
+    #         group1_abs: 組別1絕對能量
+    #         group2_abs: 組別2絕對能量
+    #         group1_rel: 組別1相對能量
+    #         group2_rel: 組別2相對能量
+    #         montage_info: (montage, ch_names) tuple
+    #         group1_name: 組別1名稱
+    #         group2_name: 組別2名稱
+    #         save_path: 儲存路徑
+    #     """
+    #     import matplotlib.gridspec as gridspec
         
-        montage, ch_names = montage_info
-        bands = list(self.BANDS.keys())
-        n_bands = len(bands)
+    #     montage, ch_names = montage_info
+    #     bands = list(self.BANDS.keys())
+    #     n_bands = len(bands)
         
-        # 建立圖表
-        fig = plt.figure(figsize=(20, 6))
-        gs = gridspec.GridSpec(2, n_bands, figure=fig, hspace=0.3, wspace=0.2)
+    #     # 建立圖表
+    #     fig = plt.figure(figsize=(20, 6))
+    #     gs = gridspec.GridSpec(2, n_bands, figure=fig, hspace=0.3, wspace=0.2)
         
-        for i, band in enumerate(bands):
-            # 絕對能量差異（使用對數）
-            abs_diff = np.log10(group2_abs[band] + 1e-10) - np.log10(group1_abs[band] + 1e-10)
-            vmax_abs = max(abs(abs_diff.min()), abs(abs_diff.max()))
+    #     for i, band in enumerate(bands):
+    #         # 絕對能量差異（使用對數）
+    #         abs_diff = np.log10(group2_abs[band] + 1e-10) - np.log10(group1_abs[band] + 1e-10)
+    #         vmax_abs = max(abs(abs_diff.min()), abs(abs_diff.max()))
             
-            ax1 = fig.add_subplot(gs[0, i])
-            self._draw_topomap(abs_diff, montage, ch_names, ax1,
-                             f'{band}', -vmax_abs, vmax_abs, cmap='RdBu_r')
-            if i == 0:
-                ax1.set_ylabel('Log Absolute\nPower Difference', 
-                             fontsize=11, fontweight='bold')
+    #         ax1 = fig.add_subplot(gs[0, i])
+    #         self._draw_topomap(abs_diff, montage, ch_names, ax1,
+    #                          f'{band}', -vmax_abs, vmax_abs, cmap='RdBu_r')
+    #         if i == 0:
+    #             ax1.set_ylabel('Log Absolute\nPower Difference', 
+    #                          fontsize=11, fontweight='bold')
             
-            # 相對能量差異
-            rel_diff = group2_rel[band] - group1_rel[band]
-            vmax_rel = max(abs(rel_diff.min()), abs(rel_diff.max()))
+    #         # 相對能量差異
+    #         rel_diff = group2_rel[band] - group1_rel[band]
+    #         vmax_rel = max(abs(rel_diff.min()), abs(rel_diff.max()))
             
-            ax2 = fig.add_subplot(gs[1, i])
-            self._draw_topomap(rel_diff, montage, ch_names, ax2,
-                             '', -vmax_rel, vmax_rel, cmap='RdBu_r')
-            if i == 0:
-                ax2.set_ylabel('Relative\nPower Difference', 
-                             fontsize=11, fontweight='bold')
+    #         ax2 = fig.add_subplot(gs[1, i])
+    #         self._draw_topomap(rel_diff, montage, ch_names, ax2,
+    #                          '', -vmax_rel, vmax_rel, cmap='RdBu_r')
+    #         if i == 0:
+    #             ax2.set_ylabel('Relative\nPower Difference', 
+    #                          fontsize=11, fontweight='bold')
         
-        fig.suptitle(f'Power Difference: {group2_name} - {group1_name}', 
-                    fontsize=16, fontweight='bold')
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
+    #     fig.suptitle(f'Power Difference: {group2_name} - {group1_name}', 
+    #                 fontsize=16, fontweight='bold')
+    #     plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    #     plt.close()
     
     def _draw_topomap(
         self,
