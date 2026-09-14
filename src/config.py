@@ -38,7 +38,7 @@ def _path(key: str, default: Path) -> Path:
 
 # 母帶：edf 根（下有 ACS/ NAD/ P/）
 EEG_RAW_DIR = _path("EEG_RAW", _SUBTHEME_ROOT / "data" / "edf")
-# 受試者表（去識別）；EEG 版本住 common\demographics\eeg，合併主表另議
-DEMOGRAPHICS_DIR = _path("DEMOGRAPHICS", _ALZ_ROOT / "common" / "demographics" / "eeg")
+# 受試者表（去識別）；2024 場次表 common\demographics\sessions_2024（與 hospital_A 母體不同，合併另議）
+DEMOGRAPHICS_DIR = _path("DEMOGRAPHICS", _ALZ_ROOT / "common" / "demographics" / "sessions_2024")
 # 工作區（子主題層）
 WORKSPACE_DIR = _path("WORKSPACE", _SUBTHEME_ROOT / "workspace")
