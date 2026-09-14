@@ -1,4 +1,4 @@
-"""路徑常數。
+r"""路徑常數。
 
 外部根目錄由 repo 根的 paths.txt 宣告（KEY=路徑，一行一鍵；gitignore，範本見 paths.example.txt）。
 缺鍵時依 D:\Alz 佈局相對推導：repo 上兩層 = 子主題根（EEG\）、上三層 = 主題根（D:\Alz）。
