@@ -1,4 +1,4 @@
 # 外部根目錄宣告（KEY=路徑，一行一鍵）。複製為 paths.txt 後依本機修改；paths.txt 不入 git。
-EEG_RAW=D:\Alz\EEG\data\edf
-DEMOGRAPHICS=D:\Alz\common\demographics\sessions_2024
-WORKSPACE=D:\Alz\EEG\workspace
+EEG_RAW=D:\research\Alz\EEG\data\edf
+DEMOGRAPHICS=D:\research\Alz\common\demographics\sessions_2024
+WORKSPACE=D:\research\Alz\EEG\workspace
